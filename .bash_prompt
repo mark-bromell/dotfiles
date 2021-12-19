@@ -1,40 +1,114 @@
 #!/usr/bin/env bash
 
-reset="\[\e[0m\]"
-black="\[\e[30m\]"
-red="\[\e[31m\]"
-green="\[\e[32m\]"
-yellow="\[\e[33m\]"
-blue="\[\e[34m\]"
-magenta="\[\e[35m\]"
-cyan="\[\e[36m\]"
-light_grey="\[\e[37m\]"
-dark_grey="\[\e[90m\]"
-light_red="\[\e[91m\]"
-light_green="\[\e[92m\]"
-light_yellow="\[\e[93m\]"
-light_blue="\[\e[94m\]"
-light_magenta="\[\e[95m\]"
-light_cyan="\[\e[96m\]"
-white="\[\e[97m\]"
+source ~/.git-prompt.sh
 
-source ~/git-prompt.sh
+function __git_symbol {
+    if [ $(git rev-parse --is-inside-git-dir 2> /dev/null) ]; then
+        echo ''
+    fi
+}
+
+function __git_remote {
+    # Based on the `git status -sb` command.
+    #
+    # Example output
+    #   ## main...origin/main [ahead 3]
+    #   M .bash_prompt
+
+    local printf_format="${1}"
+
+    # If the status contains 'ahead' replace it with a '+'.
+    local ahead="$(git status -sb 2> /dev/null |
+        grep '##' 2> /dev/null |
+        grep -e '\[ahead' -e ', ahead' 2> /dev/null |
+        sed 's/.*/>/')"
+    # If the status contains 'behind' replace it with a '-'.
+    local behind="$(git status -sb 2> /dev/null |
+        grep '##' 2> /dev/null |
+        grep -e '\[behind' -e ', behind' 2> /dev/null |
+        sed 's/.*/</')"
+    # Get the branch details on the line that contains '##'
+    # It has a remote beind tracked if that line contains '...'
+    # Just get the origin name based on the format `*...<remote>/*`
+    local remote="$(git status -sb 2> /dev/null |
+        grep '##' |
+        grep '\.\.\.' 2> /dev/null |
+        sed 's/.*\.\.\.//' |
+        sed 's/\/.*//')"
+
+    if [ ! -z "$remote" ]; then
+        printf -- "$printf_format" "$behind" "$remote" "$ahead"
+    fi
+}
+
+function __git_changes {
+    local printf_format="${1}"
+
+    if [ $(git rev-parse --is-inside-git-dir 2> /dev/null) ]; then
+        local untracked="$(git ls-files --others --exclude-standard 2> /dev/null |
+            wc -l |
+            grep -v '0' 2> /dev/null |
+            cat)"
+        local unstaged="$(git diff --name-only 2> /dev/null |
+            wc -l |
+            grep -v '0' 2> /dev/null |
+            cat)"
+        local staged="$(git diff --name-only --cached 2> /dev/null |
+            wc -l |
+            grep -v '0' 2> /dev/null |
+            cat)"
+
+        if [ ! -z "$untracked" ] || [ ! -z "$unstaged" ] || [ ! -z "$staged" ]; then
+            printf -- "$printf_format" "$untracked" "$unstaged" "$staged"
+        fi
+    fi
+}
+
+function __git_stash {
+    local printf_format="${1}"
+
+    if [ $(git rev-parse --verify --quiet refs/stash 2> /dev/null) ]; then
+        printf -- "$printf_format" "$"
+    fi
+}
 
 function set_ps1 {
-    # The start will always be the same
-    local start="${magenta}\\w"
+    local r="\[\e[0m\]"
+    local bold="\[\e[1m\]"
+    local dim="\[\e[2m\]"
+    local underline="\[\e[4m\]"
 
-    # The ending will also be the same always
-    local end=""
+    local black="\[\e[30m\]"
+    local red="\[\e[31m\]"
+    local green="\[\e[32m\]"
+    local yellow="\[\e[33m\]"
+    local blue="\[\e[34m\]"
+    local magenta="\[\e[35m\]"
+    local cyan="\[\e[36m\]"
+    local light_grey="\[\e[37m\]"
+    local dark_grey="\[\e[90m\]"
+    local light_red="\[\e[91m\]"
+    local light_green="\[\e[92m\]"
+    local light_yellow="\[\e[93m\]"
+    local light_blue="\[\e[94m\]"
+    local light_magenta="\[\e[95m\]"
+    local light_cyan="\[\e[96m\]"
+    local white="\[\e[97m\]"
+
+    PS1="${blue}\\w"
+
+    PS1+=" ${dark_grey}\$(__git_symbol)"
+    PS1+="\$(__git_remote ' $dark_grey[$yellow%s$light_grey%s$yellow%s$dark_grey]$r')"
+    PS1+="\$(__git_branch ' $dark_grey[$magenta%s$dark_grey]$r')"
+    PS1+="\$(__git_stash ' $dark_grey[$light_grey%s$dark_grey]$r')"
+    PS1+="\$(__git_changes ' ${dark_grey}[$red%s$dark_grey|$yellow%s$dark_grey|$green%s${dark_grey}]$r')"
+
     if is_linux; then
-        end+="\n"
+        PS1+="\n"
     elif is_msys; then
-        end+="\012"
+        PS1+="\012"
     fi
-    end+="${dark_grey}$ "
-    end+="${reset}"
-    
-    PS1="${start}\$(__git_ps1 ' ${reset}[${yellow}%s${reset}]')${end}"
+    PS1+="${dark_grey}$ ${r}"
 }
 
 set_ps1
